@@ -1,0 +1,86 @@
+---
+title: "Practical Machine Learning - Project Assignment"
+author: "Christian Andersen"
+date: "22 9 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE)
+library(tidyverse)
+library(stringr)
+library(caret)
+
+```
+
+## Introduction
+This is the project assignment for Practical Machine Learning course. It contains a classification analysis comparing two methods. 
+
+## Loading the data for the analysis
+There are two datasets. One called training on which I will train and test the two models. The second dataset is quite small with 20 observations. It is used for a prediction test in the project quiz. This small dataset will be loaded and handled at the end of the assignment.
+
+```{r load, echo=TRUE}
+set.seed(1234)
+data <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+data <- data %>% mutate(classe=as.factor(classe))
+```
+
+## Exploring and preparing the data
+The dataset contains character variables and numerical variables. I first look at the character data. The analysis shows that all of the character variables have very many missing values, and there are few unique values among the nonmissing. 
+
+```{r char, echo=TRUE}
+chrdata <- data %>% select(where(is_character))
+chrdata %>% summarise_all(n_distinct) 
+```
+All character variables are left out of the dataset.
+Turning to the numerical variables it is seen that some are without missing values, while others have a lot. There are so many missing that imputation of values seems to be futile. It is better to leave out all variables with missing values. In addition four columns in the start the file seems without importance for predicting the kind of excersise that is performed. These are left out. 
+
+```{r num, echo=TRUE}
+numdata <- data %>% select(where(is_numeric))
+```
+```{r num2, echo=TRUE}
+drop <- names(numdata)[1:4]
+drop
+data2 <- numdata %>% select(-all_of(drop)) 
+data2 <- data2 %>% select_if(~ !any(is.na(.)))
+```
+
+After preparation the data is split into a training set and a testing set.
+
+```{r training, echo=TRUE}
+inTrain = createDataPartition(data2$classe, p = 3/4)[[1]]
+training = data2[ inTrain,]
+testing = data2[-inTrain,]
+```
+## Analysis 1: Classification tree
+First I try a basic classification tree.
+```{r clas, echo=TRUE}
+fit_rpart <- train(classe ~ ., data = training, method = "rpart")
+pred_rpart <- predict(fit_rpart,testing)
+confusionMatrix(testing$classe, pred_rpart)
+#fancyRpartPlot(fit_rpart$finalModel)
+```
+## Analysis 2: Random forests
+This type of analysis is more computational, and therefore the execution time for this is quite long, at least on my PC.
+```{r for, echo=TRUE, cache=TRUE}
+fit_rf <- train(classe ~ ., data = training, method = "rf")
+pred_rf <- predict(fit_rf,testing)
+confusionMatrix(testing$classe, pred_rf)
+```
+It is seen that the random forests model has a very high success rate, and is preferable to the standard classification tree.
+
+## Final prediction on 20 cases test-set
+The test data is loaded and transformed in the same way as the training set.
+```{r 20test, echo=TRUE}
+end <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")   
+endnum <- end %>% select(where(is_numeric))
+endtest <- endnum %>% select(-all_of(drop))
+endtest <- endnum %>% select_if(~ !any(is.na(.)))
+``` 
+The prediction on this set is done using the random forest model in fit_rf.
+```{r 20final, echo=TRUE}
+pred_rf2 <- predict(fit_rf,endtest)
+pred_rf2
+```
+The results from this analysis will be used in the project quiz.
+
